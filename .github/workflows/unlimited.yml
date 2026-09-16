@@ -1,0 +1,81 @@
+name: Free Members Unlimited
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'  # Runs every 30 minutes automatically
+
+jobs:
+  order:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        batch: [1, 2, 3, 4, 5]  # 5 parallel jobs
+    steps:
+    - name: Place Unlimited Orders
+      run: |
+        python3 << 'PYEOF'
+import requests, time, random, warnings
+warnings.filterwarnings('ignore')
+
+TARGET = "https://t.me/+ZALu1pOKeuMwMjFl"
+URL = "https://smm.plus/api/free-service/order"
+
+# Free public proxies (auto-rotate)
+FREE_PROXIES = [
+    "http://proxy.toolip.io:31337",
+    "http://proxy-nl.opensecurity.cc:8080",
+    "http://proxy.server-internet.com:3128",
+]
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edge/120.0.0.0",
+]
+
+print(f"[Batch ${{matrix.batch}}] Starting unlimited orders...")
+
+success = 0
+for attempt in range(1, 201):  # 200 attempts per job = 1000 total
+    proxy = random.choice(FREE_PROXIES + [None])
+    ua = random.choice(USER_AGENTS)
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Origin": "https://smm.plus",
+        "Referer": "https://smm.plus/free-telegram-members",
+        "User-Agent": ua
+    }
+    
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    
+    try:
+        r = requests.post(
+            URL,
+            json={"service": "telegram_members", "link": TARGET, "quantity": 50},
+            headers=headers,
+            proxies=proxies,
+            timeout=15,
+            verify=False
+        )
+        
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("ok"):
+                success += 1
+                print(f"[Batch ${{matrix.batch}}][{success}] ✓ SUCCESS")
+            else:
+                retry = data.get("retry_after_seconds", 60)
+                if retry > 0:
+                    print(f"[Batch ${{matrix.batch}}] Rate limit, wait {retry}s")
+                    time.sleep(min(retry, 90))
+        
+    except Exception as e:
+        pass
+    
+    time.sleep(random.randint(3, 10))
+
+print(f"[Batch ${{matrix.batch}}] Total: {success * 50} members")
+PYEOF
